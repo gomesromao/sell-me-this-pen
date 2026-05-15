@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  background: #f8f4ed;
+  color: #0f1f46;
+}
+
+body {
+  background-image:
+    radial-gradient(circle at 12% 18%, rgba(201, 236, 218, 0.55) 0, transparent 38%),
+    radial-gradient(circle at 88% 8%, rgba(255, 214, 107, 0.35) 0, transparent 32%),
+    radial-gradient(circle at 78% 92%, rgba(255, 138, 107, 0.28) 0, transparent 40%);
+  background-attachment: fixed;
+}
+
+.pill {
+  @apply inline-flex items-center justify-center rounded-full px-6 py-3 font-bold tracking-tight transition-all duration-200;
+}
+
+.pill-primary {
+  @apply pill bg-navy-900 text-cream shadow-card hover:-translate-y-0.5 hover:shadow-cardLift active:translate-y-0 disabled:opacity-50 disabled:hover:translate-y-0;
+}
+
+.pill-secondary {
+  @apply pill bg-gleam-500 text-white shadow-card hover:-translate-y-0.5 hover:shadow-cardLift active:translate-y-0 disabled:opacity-50;
+}
+
+.pill-ghost {
+  @apply pill border-2 border-navy-900/20 text-navy-900 hover:bg-navy-900/5;
+}
+
+.card {
+  @apply rounded-card bg-white p-6 shadow-card;
+}
+
+.chip {
+  @apply inline-flex items-center gap-1 rounded-full bg-mint px-3 py-1 text-xs font-bold uppercase tracking-wide text-navy-900 shadow-chip;
+}
+
+.label-eyebrow {
+  @apply text-xs font-bold uppercase tracking-[0.18em] text-navy-500;
+}
+
+textarea.input-field,
+input.input-field {
+  @apply w-full rounded-2xl border-2 border-navy-100 bg-white px-5 py-4 text-navy-900 placeholder:text-navy-300 focus:border-navy-700 focus:outline-none transition;
+}
