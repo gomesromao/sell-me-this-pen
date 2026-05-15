@@ -8,14 +8,19 @@ export const maxDuration = 60;
 type Body = {
   clients?: string;
   business?: string;
+  exclude_archetypes?: string[];
 };
 
-function pickArchetypeShortlist(count: number): CharacterArchetype[] {
-  const pool = [...CHARACTERS];
+function pickArchetypeShortlist(count: number, exclude: string[] = []): CharacterArchetype[] {
+  const excludeSet = new Set(exclude);
+  let pool = CHARACTERS.filter((c) => !excludeSet.has(c.slug));
+  // Keep at least `count` items so we can sample them; if too aggressive, relax
+  if (pool.length < count) pool = [...CHARACTERS];
+  const working = [...pool];
   const out: CharacterArchetype[] = [];
-  for (let i = 0; i < count && pool.length; i++) {
-    const idx = Math.floor(Math.random() * pool.length);
-    out.push(pool.splice(idx, 1)[0]);
+  for (let i = 0; i < count && working.length; i++) {
+    const idx = Math.floor(Math.random() * working.length);
+    out.push(working.splice(idx, 1)[0]);
   }
   return out;
 }
@@ -79,7 +84,10 @@ export async function POST(req: Request) {
       );
     }
 
-    const shortlist = pickArchetypeShortlist(4);
+    const exclude = Array.isArray(body.exclude_archetypes)
+      ? body.exclude_archetypes.filter((s): s is string => typeof s === "string").slice(0, 5)
+      : [];
+    const shortlist = pickArchetypeShortlist(4, exclude);
     const shortlistText = shortlist
       .map((c) => `- "${c.slug}" → ${c.label}: ${c.vibe}`)
       .join("\n");

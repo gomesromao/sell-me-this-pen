@@ -9,6 +9,7 @@ import ReadyScreen from "@/components/ReadyScreen";
 import SetupStep from "@/components/SetupStep";
 import Verdict from "@/components/Verdict";
 import type { FinishResponse, Persona, Question, StartResponse } from "@/lib/types";
+import { pushRecentArchetype, readRecentArchetypes } from "@/lib/recent";
 
 type Stage = "setup1" | "setup2" | "ready" | "loading" | "reveal" | "playing" | "finishing" | "verdict";
 
@@ -45,11 +46,16 @@ export default function Home() {
       const res = await fetch("/api/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clients, business }),
+        body: JSON.stringify({
+          clients,
+          business,
+          exclude_archetypes: readRecentArchetypes(),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not generate lead");
       const parsed = data as StartResponse;
+      pushRecentArchetype(parsed.persona.archetype);
       setPersona(parsed.persona);
       setQuestions(parsed.questions);
       setStage("reveal");
