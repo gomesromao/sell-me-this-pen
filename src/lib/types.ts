@@ -14,14 +14,13 @@ export type Question = {
 };
 
 export type Persona = {
+  archetype: string;
   name: string;
   title: string;
   company: string;
   mood: string;
-  avatar_emoji: string;
   pains: string[];
   intro_line: string;
-  accent_color: "navy" | "coral" | "sunny" | "gleam";
 };
 
 export type StartResponse = {
@@ -30,7 +29,7 @@ export type StartResponse = {
 };
 
 export type FinishResponse = {
-  verdict: "FECHOU" | "QUASE" | "PERDEU";
+  verdict: "CLOSED" | "ALMOST" | "LOST";
   headline: string;
   tip: string;
 };

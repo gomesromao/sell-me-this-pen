@@ -12,13 +12,14 @@ type Body = {
   transcript?: Array<{ q: string; chosen: string; reaction: string; points: number }>;
 };
 
-const SYSTEM = `Você é o lead durão fictício gerado anteriormente no joguinho "Sell Me This Pen". A call acabou. Agora você sai do personagem o suficiente pra dar uma dica genuinamente útil pro vendedor, mas mantém um tom direto, sem rodeio, ainda com sua personalidade.
+const SYSTEM = `You are the tough fictional lead the seller has been pitching to in the "Sell Me This Pen" game. The call is over. Now you step slightly out of character to give the seller one genuinely useful piece of advice, but you keep your sharp tone.
 
-REGRAS:
-- "verdict" deve ser EXATAMENTE um destes três valores: "FECHOU", "QUASE" ou "PERDEU". Use o score (0-100) como referência: >=75 fechou, 45-74 quase, <45 perdeu.
-- "headline" é uma frase curta (até 16 palavras), em primeira pessoa, dizendo se você fecharia ou não, com sua personalidade. Pode ser sarcástica se ele perdeu, ou genuína se ele fechou.
-- "tip" é UMA dica de business ou de venda concreta, prática e útil. Baseada no negócio descrito pelo vendedor e nas suas dores como lead. Até 3 frases. Sem clichê tipo "seja autêntico". Vá pro miolo. Em português do Brasil.
-- Responda APENAS JSON válido. Sem markdown.`;
+RULES
+- "verdict" MUST be exactly one of: "CLOSED", "ALMOST", "LOST". Use the final score (0-100) as a guide: ≥75 closed, 45-74 almost, <45 lost.
+- "headline" is a short first-person line (≤16 words) saying whether you would have bought or not, with your personality. Sharp, dry, no fluff.
+- "tip" is ONE concrete and practical business or sales tip — grounded in what the seller said about their business and your pains as a lead. Up to 3 sentences. Skip clichés ("be authentic", "know your customer"). Go to the meat.
+- Everything in English.
+- Output JSON only, no markdown.`;
 
 export async function POST(req: Request) {
   try {
@@ -30,30 +31,34 @@ export async function POST(req: Request) {
     const transcript = Array.isArray(body.transcript) ? body.transcript.slice(0, 8) : [];
 
     if (!persona || !business) {
-      return NextResponse.json(
-        { error: "Faltam dados do jogo." },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Game data missing." }, { status: 400 });
     }
 
     const openai = getOpenAI();
 
-    const userPrompt = `CONTEXTO DA VENDA:
-- Negócio do vendedor: """${business}"""
-- Tipo de cliente que ele atende: """${clients}"""
+    const userPrompt = `SELLER CONTEXT
+- Business: """${business}"""
+- Typical client: """${clients}"""
 
-VOCÊ É: ${persona.name}, ${persona.title} em ${persona.company}. Suas dores: ${(persona.pains || []).join(" | ")}. Seu mood: ${persona.mood}.
+YOU ARE: ${persona.name}, ${persona.title} at ${persona.company}.
+Pains: ${(persona.pains || []).join(" | ")}.
+Mood: ${persona.mood}.
 
-TRANSCRIPT DA CALL (perguntas que você fez + alternativa escolhida + sua reação + pontos):
-${transcript.map((t, i) => `${i + 1}. ${t.q} → escolheu: "${t.chosen}" (${t.points >= 0 ? "+" : ""}${t.points}) → você: "${t.reaction}"`).join("\n")}
+CALL TRANSCRIPT (questions you asked → option seller picked → your reaction → points awarded):
+${transcript
+      .map(
+        (t, i) =>
+          `${i + 1}. ${t.q} → seller: "${t.chosen}" (${t.points >= 0 ? "+" : ""}${t.points}) → you: "${t.reaction}"`,
+      )
+      .join("\n")}
 
-SCORE FINAL DO VENDEDOR: ${score}/100.
+FINAL SCORE: ${score}/100.
 
-Gere a resposta JSON:
+Generate JSON:
 {
-  "verdict": "FECHOU | QUASE | PERDEU",
-  "headline": "frase curta em primeira pessoa",
-  "tip": "dica útil em até 3 frases"
+  "verdict": "CLOSED | ALMOST | LOST",
+  "headline": "first-person short line",
+  "tip": "concrete, useful tip in up to 3 sentences"
 }`;
 
     const completion = await openai.chat.completions.create({
@@ -69,14 +74,17 @@ Gere a resposta JSON:
     const raw = completion.choices[0]?.message?.content || "{}";
     const parsed = JSON.parse(raw);
 
-    const verdicts = new Set(["FECHOU", "QUASE", "PERDEU"]);
+    const verdicts = new Set(["CLOSED", "ALMOST", "LOST"]);
     if (!verdicts.has(parsed.verdict)) {
-      parsed.verdict = score >= 75 ? "FECHOU" : score >= 45 ? "QUASE" : "PERDEU";
+      parsed.verdict = score >= 75 ? "CLOSED" : score >= 45 ? "ALMOST" : "LOST";
     }
 
     return NextResponse.json(parsed);
   } catch (err: any) {
-    const message = err?.message || "Erro desconhecido";
+    const message =
+      err?.status === 401
+        ? "OpenAI key looks invalid. Check the environment variable."
+        : err?.message || "Unknown error";
     const status = err?.status === 401 ? 401 : 500;
     return NextResponse.json({ error: message }, { status });
   }

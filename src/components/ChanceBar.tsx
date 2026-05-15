@@ -4,13 +4,14 @@ import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 import { useEffect, useState } from "react";
 
 type Props = {
-  value: number; // 0-100
+  value: number;
+  delta?: number | null;
 };
 
-export default function ChanceBar({ value }: Props) {
+export default function ChanceBar({ value, delta }: Props) {
   const safe = Math.max(0, Math.min(100, value));
   const mv = useMotionValue(safe);
-  const spring = useSpring(mv, { stiffness: 90, damping: 16, mass: 0.9 });
+  const spring = useSpring(mv, { stiffness: 120, damping: 14, mass: 0.9 });
   const widthPct = useTransform(spring, (v) => `${v}%`);
   const [displayed, setDisplayed] = useState(safe);
 
@@ -28,17 +29,31 @@ export default function ChanceBar({ value }: Props) {
   return (
     <div className="w-full">
       <div className="flex items-end justify-between mb-2">
-        <span className="label-eyebrow">Chance de fechar</span>
-        <motion.span
-          key={displayed >= 75 ? "hi" : displayed >= 45 ? "mid" : "lo"}
-          initial={{ scale: 0.85, opacity: 0.5 }}
-          animate={{ scale: 1, opacity: 1 }}
-          className="text-3xl font-extrabold text-navy-900 tabular-nums"
-        >
-          {displayed}%
-        </motion.span>
+        <span className="label-eyebrow">Chance to close</span>
+        <div className="flex items-center gap-2">
+          {delta != null && delta !== 0 ? (
+            <motion.span
+              key={`${delta}-${Math.random()}`}
+              initial={{ y: 6, opacity: 0, scale: 0.6 }}
+              animate={{ y: -22, opacity: [0, 1, 1, 0], scale: 1 }}
+              transition={{ duration: 1.6, ease: "easeOut" }}
+              className={`text-xl font-extrabold ${delta > 0 ? "text-gleam-700" : "text-coral-deep"}`}
+            >
+              {delta > 0 ? `+${delta}` : delta}
+            </motion.span>
+          ) : null}
+          <motion.span
+            key={`${displayed >= 75 ? "hi" : displayed >= 45 ? "mid" : "lo"}-${Math.round(displayed / 5)}`}
+            initial={{ scale: 0.7, rotate: -6 }}
+            animate={{ scale: 1, rotate: 0 }}
+            transition={{ type: "spring", stiffness: 280, damping: 14 }}
+            className="text-4xl font-extrabold text-navy-900 tabular-nums"
+          >
+            {displayed}%
+          </motion.span>
+        </div>
       </div>
-      <div className="relative h-6 w-full rounded-full border-2 border-navy-900 bg-cream-deep overflow-hidden shadow-chip">
+      <div className="relative h-7 w-full rounded-full border-4 border-navy-900 bg-cream-deep overflow-hidden shadow-chip">
         <motion.div
           className={`h-full bg-gradient-to-r ${tone}`}
           style={{ width: widthPct }}

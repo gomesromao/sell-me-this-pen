@@ -1,27 +1,29 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
-import Intro from "@/components/Intro";
+import { useEffect, useState } from "react";
+import Host from "@/components/Host";
 import PersonaCard from "@/components/PersonaCard";
 import QuestionStage from "@/components/QuestionStage";
+import ReadyScreen from "@/components/ReadyScreen";
+import SetupStep from "@/components/SetupStep";
 import Verdict from "@/components/Verdict";
 import type { FinishResponse, Persona, Question, StartResponse } from "@/lib/types";
 
-type Stage = "intro" | "loading" | "reveal" | "playing" | "finishing" | "verdict";
+type Stage = "setup1" | "setup2" | "ready" | "loading" | "reveal" | "playing" | "finishing" | "verdict";
 
 const LOADING_LINES = [
-  "convocando o lead...",
-  "afiando perguntas zoadas...",
-  "colocando o lead de mau humor...",
-  "regulando a barra de fechamento...",
-  "lendo o teu pitch nas entrelinhas...",
+  "summoning your lead...",
+  "loading them up with skepticism...",
+  "sharpening five tough questions...",
+  "checking your pitch for weak spots...",
+  "ok, they're walking in...",
 ];
 
 export default function Home() {
-  const [stage, setStage] = useState<Stage>("intro");
-  const [clients, setClients] = useState("");
+  const [stage, setStage] = useState<Stage>("setup1");
   const [business, setBusiness] = useState("");
+  const [clients, setClients] = useState("");
   const [persona, setPersona] = useState<Persona | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
   const [score, setScore] = useState(50);
@@ -30,34 +32,31 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [loadingLineIdx, setLoadingLineIdx] = useState(0);
 
-  async function handleStart(cl: string, bz: string) {
-    setClients(cl);
-    setBusiness(bz);
+  useEffect(() => {
+    if (stage !== "loading") return;
+    const id = setInterval(() => setLoadingLineIdx((i) => (i + 1) % LOADING_LINES.length), 1900);
+    return () => clearInterval(id);
+  }, [stage]);
+
+  async function callStart() {
     setError(null);
     setStage("loading");
-
-    const interval = setInterval(() => {
-      setLoadingLineIdx((i) => (i + 1) % LOADING_LINES.length);
-    }, 1800);
-
     try {
       const res = await fetch("/api/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ clients: cl, business: bz }),
+        body: JSON.stringify({ clients, business }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha ao gerar lead");
+      if (!res.ok) throw new Error(data.error || "Could not generate lead");
       const parsed = data as StartResponse;
       setPersona(parsed.persona);
       setQuestions(parsed.questions);
       setStage("reveal");
-      setTimeout(() => setStage("playing"), 2200);
+      setTimeout(() => setStage("playing"), 2600);
     } catch (e: any) {
       setError(e.message);
-      setStage("intro");
-    } finally {
-      clearInterval(interval);
+      setStage("ready");
     }
   }
 
@@ -78,14 +77,14 @@ export default function Home() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Falha no veredito");
+      if (!res.ok) throw new Error(data.error || "Verdict failed");
       setResult(data);
       setStage("verdict");
     } catch (e: any) {
       setResult({
-        verdict: payload.score >= 75 ? "FECHOU" : payload.score >= 45 ? "QUASE" : "PERDEU",
-        headline: "Acabou a call. A AI travou no final, mas você foi até o fim.",
-        tip: e.message || "Tenta de novo daqui a pouco.",
+        verdict: payload.score >= 75 ? "CLOSED" : payload.score >= 45 ? "ALMOST" : "LOST",
+        headline: "Call's over. The AI choked on the verdict, but you made it through.",
+        tip: e.message || "Give it another shot.",
       });
       setStage("verdict");
     }
@@ -97,18 +96,52 @@ export default function Home() {
     setScore(50);
     setTranscript([]);
     setResult(null);
-    setStage("intro");
+    setError(null);
+    setStage("setup1");
   }
 
   return (
     <main className="min-h-screen">
+      <header className="px-6 pt-8 flex items-center justify-between max-w-4xl mx-auto">
+        <span className="chip">Coconut VA · Sales Trainer</span>
+        <span className="chip bg-sunny text-navy-900">Beta</span>
+      </header>
+
       <AnimatePresence mode="wait">
-        {stage === "intro" && (
-          <Intro
-            key="intro"
-            initialClients={clients}
-            initialBusiness={business}
-            onStart={handleStart}
+        {stage === "setup1" && (
+          <SetupStep
+            key="setup1"
+            step={1}
+            question="First — tell me about your business."
+            placeholder="Local marketing consultancy: 30-day sprints focused on Google Maps, paid ads, and WhatsApp Business. Refund guarantee if we don't generate 20 leads."
+            initialValue={business}
+            onNext={(v) => {
+              setBusiness(v);
+              setStage("setup2");
+            }}
+          />
+        )}
+
+        {stage === "setup2" && (
+          <SetupStep
+            key="setup2"
+            step={2}
+            question="Now — tell me more about your clients."
+            placeholder="Owners of dental clinics with 1–5 chairs. They want more bookings but keep losing inbound calls. $30–80k/month revenue."
+            initialValue={clients}
+            onNext={(v) => {
+              setClients(v);
+              setStage("ready");
+            }}
+            onBack={() => setStage("setup1")}
+          />
+        )}
+
+        {stage === "ready" && (
+          <ReadyScreen
+            key="ready"
+            onStart={callStart}
+            onBack={() => setStage("setup2")}
             loading={false}
             error={error}
           />
@@ -120,49 +153,39 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="mx-auto max-w-2xl px-6 py-24 text-center"
+            className="mx-auto max-w-2xl px-6 py-20 text-center flex flex-col items-center"
           >
-            <motion.div
-              animate={{ rotate: [0, -8, 8, -8, 0] }}
-              transition={{ repeat: Infinity, duration: 1.8 }}
-              className="text-8xl mb-6"
-            >
-              🖊️
-            </motion.div>
-            <h2 className="text-3xl md:text-4xl font-extrabold text-navy-900">
-              {LOADING_LINES[loadingLineIdx]}
-            </h2>
-            <p className="mt-3 text-navy-500">isso pode levar uns 10–15 segundos.</p>
+            <Host speech={LOADING_LINES[loadingLineIdx]} size={180} />
+            <p className="mt-6 text-navy-500 text-sm">10–20 seconds. AI is in character.</p>
           </motion.div>
         )}
 
         {stage === "reveal" && persona && (
           <motion.div
             key="reveal"
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -16 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={{ type: "spring", stiffness: 220, damping: 22 }}
             className="mx-auto max-w-3xl px-6 py-12"
           >
-            <div className="mb-5 text-center">
-              <span className="chip bg-sunny text-navy-900">Lead na linha</span>
+            <motion.div
+              initial={{ scale: 0.8 }}
+              animate={{ scale: [0.8, 1.05, 1] }}
+              transition={{ duration: 0.7 }}
+              className="mb-5 text-center"
+            >
+              <span className="chip bg-sunny text-navy-900">Lead joining the call...</span>
               <h2 className="mt-3 text-3xl md:text-4xl font-extrabold text-navy-900">
-                Olha quem entrou na call.
+                Meet your lead.
               </h2>
-            </div>
+            </motion.div>
             <PersonaCard persona={persona} />
           </motion.div>
         )}
 
         {stage === "playing" && persona && (
-          <motion.div
-            key="playing"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <QuestionStage persona={persona} questions={questions} onComplete={handleComplete} />
-          </motion.div>
+          <QuestionStage key="playing" persona={persona} questions={questions} onComplete={handleComplete} />
         )}
 
         {stage === "finishing" && persona && (
@@ -171,17 +194,17 @@ export default function Home() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="mx-auto max-w-2xl px-6 py-24 text-center"
+            className="mx-auto max-w-2xl px-6 py-20 text-center"
           >
             <motion.div
-              animate={{ scale: [1, 1.15, 1] }}
-              transition={{ repeat: Infinity, duration: 1.2 }}
+              animate={{ scale: [1, 1.15, 1], rotate: [0, -4, 4, 0] }}
+              transition={{ repeat: Infinity, duration: 1.4 }}
               className="text-7xl mb-6"
             >
               🥁
             </motion.div>
             <h2 className="text-3xl font-extrabold text-navy-900">
-              {persona.name} tá pensando...
+              {persona.name} is thinking...
             </h2>
           </motion.div>
         )}

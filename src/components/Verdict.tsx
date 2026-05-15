@@ -12,13 +12,13 @@ type Props = {
 };
 
 const VERDICT_META: Record<FinishResponse["verdict"], { emoji: string; tone: string; label: string }> = {
-  FECHOU: { emoji: "🎉", tone: "bg-gleam-300 text-navy-900", label: "Fechou negócio" },
-  QUASE: { emoji: "😬", tone: "bg-sunny text-navy-900", label: "Passou perto" },
-  PERDEU: { emoji: "💀", tone: "bg-coral text-navy-900", label: "Perdeu o lead" },
+  CLOSED: { emoji: "🎉", tone: "bg-gleam-300 text-navy-900", label: "Deal closed" },
+  ALMOST: { emoji: "😬", tone: "bg-sunny text-navy-900", label: "So close" },
+  LOST: { emoji: "💀", tone: "bg-coral text-navy-900", label: "Lead walked" },
 };
 
 export default function Verdict({ persona, result, score, onPlayAgain }: Props) {
-  const meta = VERDICT_META[result.verdict] || VERDICT_META.QUASE;
+  const meta = VERDICT_META[result.verdict] || VERDICT_META.ALMOST;
 
   return (
     <motion.div
@@ -28,37 +28,53 @@ export default function Verdict({ persona, result, score, onPlayAgain }: Props) 
     >
       <div className="text-center">
         <motion.div
-          initial={{ scale: 0.6, rotate: -10 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: "spring", stiffness: 140, damping: 12 }}
+          initial={{ scale: 0, rotate: -25 }}
+          animate={{ scale: [0, 1.25, 1], rotate: [- 25, 8, 0] }}
+          transition={{ duration: 0.9, ease: "easeOut" }}
           className="text-8xl mb-3"
           aria-hidden
         >
           {meta.emoji}
         </motion.div>
         <span className={`chip ${meta.tone}`}>{meta.label} · {score}%</span>
-        <h2 className="mt-4 text-4xl md:text-6xl font-extrabold text-navy-900 leading-[0.95]">
+        <motion.h2
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, type: "spring", stiffness: 220, damping: 22 }}
+          className="mt-4 text-4xl md:text-6xl font-extrabold text-navy-900 leading-[0.95]"
+        >
           {result.headline}
-        </h2>
+        </motion.h2>
       </div>
 
       <PersonaCard persona={persona} compact speech={null} />
 
-      <div className="card bg-cream-deep border-2 border-navy-900">
-        <div className="label-eyebrow mb-2">Dica do {persona.name.split(" ")[0]}</div>
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5, type: "spring", stiffness: 220, damping: 22 }}
+        className="card bg-cream-deep border-4 border-navy-900"
+      >
+        <div className="label-eyebrow mb-2">Tip from {persona.name.split(" ")[0]}</div>
         <p className="text-lg md:text-xl text-navy-900 leading-relaxed font-semibold">
           {result.tip}
         </p>
-      </div>
+      </motion.div>
 
       <div className="flex flex-wrap items-center gap-3 justify-center">
-        <button type="button" onClick={onPlayAgain} className="pill-primary text-lg">
-          Jogar de novo →
-        </button>
+        <motion.button
+          type="button"
+          onClick={onPlayAgain}
+          whileHover={{ scale: 1.04, rotate: -1 }}
+          whileTap={{ scale: 0.96 }}
+          className="pill-primary text-lg"
+        >
+          Play again →
+        </motion.button>
         <button
           type="button"
           onClick={() => {
-            const text = `Encarei um lead durão no Sell Me This Pen e fiz ${score}%. ${result.headline}`;
+            const text = `I faced a tough lead on Sell Me This Pen and scored ${score}%. ${result.headline}`;
             if (navigator.share) {
               navigator.share({ title: "Sell Me This Pen", text }).catch(() => {});
             } else {
@@ -67,7 +83,7 @@ export default function Verdict({ persona, result, score, onPlayAgain }: Props) 
           }}
           className="pill-ghost text-lg"
         >
-          Compartilhar
+          Share
         </button>
       </div>
     </motion.div>

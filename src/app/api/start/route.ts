@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { CHARACTERS } from "@/lib/characters";
 import { getOpenAI, OPENAI_MODEL } from "@/lib/openai";
 
 export const runtime = "nodejs";
@@ -9,32 +10,42 @@ type Body = {
   business?: string;
 };
 
-const SYSTEM = `Você é o diretor de um joguinho chamado "Sell Me This Pen", inspirado naquela cena clássica do Wolf of Wall Street.
-Sua função é gerar um LEAD durão e fictício e o roteiro de 5 perguntas em formato ABC que esse lead vai disparar contra o vendedor.
+const ARCHETYPE_LIST = CHARACTERS.map(
+  (c) => `- "${c.slug}" → ${c.label}: ${c.vibe}`,
+).join("\n");
 
-REGRAS DE OURO:
-- O lead é coerente com o perfil de cliente descrito pelo vendedor, mas tem personalidade própria, com nome, cargo e empresa fictícios.
-- Ele é cético, ocupado, e bem objetivo. Não é antipático gratuitamente, mas testa o vendedor.
-- O tom das perguntas pode ser um pouco zoado, debochado, inesperado, mas SEM perder a coerência com a venda. Tipo: "se você desaparecer amanhã, em quem eu confio? por quê?" ou "me convence em uma frase ou tô saindo dessa call agora".
-- Cada pergunta tem 3 alternativas (A, B, C). Cada uma vale entre -20 e +20 pontos.
-- Distribuição dos pontos por pergunta: deve haver pelo menos uma resposta ruim (negativa), pelo menos uma boa (positiva) e uma morna. NÃO faça todas iguais.
-- A "reaction" é uma frase curta (até 14 palavras) que o lead solta logo após o vendedor escolher aquela opção. Em primeira pessoa, com a personalidade do lead. Pode ser sarcástica se a resposta foi ruim, intrigada se foi morna, ou um aceno se foi boa.
-- "intro_line" é a primeira fala do lead ao "entrar na call". Curta, com personalidade.
-- "accent_color" escolha um entre: navy, coral, sunny, gleam. Combine com a vibe da persona.
-- "avatar_emoji" um único emoji que represente o lead.
-- Sempre em português do Brasil.
-- Responda APENAS JSON válido seguindo o schema. Sem markdown.`;
+const SYSTEM = `You are the director of a sales-training game called "Sell Me This Pen", inspired by the famous scene from The Wolf of Wall Street.
+
+Your job: generate one tough, fictional LEAD plus 5 multiple-choice questions (A/B/C) the lead will throw at the seller during a discovery call.
+
+PERSONA RULES
+- The lead is coherent with the seller's business and ideal client, but has their own personality, name, title and (made-up) company.
+- Pick the best matching archetype from this list and put its slug in "archetype":
+${ARCHETYPE_LIST}
+- The persona's name, title and company should fit the chosen archetype and the seller's market. Do not reuse the example names from the archetype list.
+
+QUESTION RULES
+- The lead is skeptical, busy, sharp. Tough but professional — never a clown, never goofy.
+- Questions should hit real objections a buyer in this market would raise: ROI, trust, switching cost, risk, edge cases, references. Mix the angles.
+- Each question has 3 options (A, B, C). Each option is scored from -20 to +20 points.
+- Every question MUST contain one clearly weak answer (negative points), one strong answer (positive points), and one lukewarm answer (close to zero). Vary which letter is the strong one across the 5 questions.
+- "reaction" is what the lead says right after the seller picks that option. ≤14 words, in character, first person. Dry, sharp, sometimes cutting if the answer was weak; impressed but reserved if the answer was strong.
+- "intro_line" is the first thing the lead says when joining the call. Short, with attitude. No greetings like "hello, my name is".
+- "mood" is a short 2-4 word descriptor like "skeptical and rushed".
+
+GLOBAL RULES
+- Everything must be written in English.
+- Output JSON only. No markdown. Stick to the schema exactly.`;
 
 const SCHEMA_HINT = `{
   "persona": {
+    "archetype": "one of the slugs above",
     "name": "string",
     "title": "string",
     "company": "string",
-    "mood": "string curta tipo 'cético e apressado'",
-    "avatar_emoji": "1 emoji",
+    "mood": "short string",
     "pains": ["string", "string", "string"],
-    "intro_line": "string",
-    "accent_color": "navy | coral | sunny | gleam"
+    "intro_line": "string"
   },
   "questions": [
     {
@@ -56,27 +67,28 @@ export async function POST(req: Request) {
 
     if (!clients || !business) {
       return NextResponse.json(
-        { error: "Preencha os dois campos antes de começar." },
+        { error: "Fill in both fields before starting." },
         { status: 400 },
       );
     }
 
     const openai = getOpenAI();
 
-    const userPrompt = `O VENDEDOR descreveu o NEGÓCIO dele assim:
+    const userPrompt = `THE SELLER described their BUSINESS like this:
 """${business}"""
 
-E descreveu o tipo de CLIENTE que ele atende assim:
+And described their typical CLIENT like this:
 """${clients}"""
 
-Gere um lead durão coerente com esse contexto + 5 perguntas ABC.
+Generate a tough lead that fits this context, plus 5 ABC questions. Pick the most fitting archetype slug.
+
 Schema:
 ${SCHEMA_HINT}`;
 
     const completion = await openai.chat.completions.create({
       model: OPENAI_MODEL,
       response_format: { type: "json_object" },
-      temperature: 0.95,
+      temperature: 0.9,
       messages: [
         { role: "system", content: SYSTEM },
         { role: "user", content: userPrompt },
@@ -88,16 +100,24 @@ ${SCHEMA_HINT}`;
 
     if (!parsed?.persona || !Array.isArray(parsed?.questions) || parsed.questions.length < 3) {
       return NextResponse.json(
-        { error: "A AI devolveu um formato inesperado. Tenta de novo." },
+        { error: "The AI returned an unexpected format. Try again." },
         { status: 502 },
       );
     }
 
-    // Trim/normalize to 5 questions
+    // Validate archetype, fall back to random if mismatched
+    const validSlugs = new Set(CHARACTERS.map((c) => c.slug));
+    if (!validSlugs.has(parsed.persona.archetype)) {
+      parsed.persona.archetype = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)].slug;
+    }
+
     parsed.questions = parsed.questions.slice(0, 5);
     return NextResponse.json(parsed);
   } catch (err: any) {
-    const message = err?.message || "Erro desconhecido";
+    const message =
+      err?.status === 401
+        ? "OpenAI key looks invalid. Check the environment variable."
+        : err?.message || "Unknown error";
     const status = err?.status === 401 ? 401 : 500;
     return NextResponse.json({ error: message }, { status });
   }
